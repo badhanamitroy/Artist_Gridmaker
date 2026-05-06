@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GridRef — Portrait Drawing Grid Tool</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0e0d0c;
+      --surface: #181614;
+      --panel: #1f1d1b;
+      --border: rgba(255,255,255,0.08);
+      --border-hover: rgba(255,255,255,0.16);
+      --amber: #e8a94f;
+      --amber-dim: rgba(232, 169, 79, 0.12);
+      --amber-glow: rgba(232, 169, 79, 0.25);
+      --text: #f0ece6;
+      --muted: #7a7268;
+      --faint: #2e2b27;
+      --success: #5fb98c;
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+      --radius-xl: 32px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Sora', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── Grain overlay ─── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 999;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      opacity: 0.55;
+    }
+
+    /* ─── Header ─── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 36px;
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      background: rgba(14,13,12,0.85);
+      position: sticky; top: 0; z-index: 100;
+      animation: slideDown 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: inherit;
+    }
+
+    .logo-icon {
+      width: 36px; height: 36px;
+      border: 1.5px solid var(--amber);
+      border-radius: 9px;
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      grid-template-rows: repeat(3,1fr);
+      padding: 5px; gap: 2px;
+    }
+
+    .logo-icon span {
+      background: var(--amber);
+      border-radius: 2px;
+      animation: pulse 3s ease-in-out infinite;
+    }
+
+    .logo-icon span:nth-child(2) { animation-delay: 0.3s; }
+    .logo-icon span:nth-child(5) { animation-delay: 0.6s; }
+    .logo-icon span:nth-child(8) { animation-delay: 0.9s; }
+
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+
+    .logo-text {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px; font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .logo-text em { font-style: normal; color: var(--amber); }
+
+    .header-badge {
+      font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+      color: var(--muted); text-transform: uppercase;
+    }
+
+    /* ─── Layout ─── */
+    .workspace {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      min-height: calc(100vh - 61px);
+      animation: fadeIn 0.6s 0.15s ease both;
+    }
+
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+    /* ─── Sidebar ─── */
+    .sidebar {
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      padding: 28px 24px;
+      overflow-y: auto;
+      display: flex; flex-direction: column; gap: 28px;
+      position: sticky; top: 61px;
+      height: calc(100vh - 61px);
+    }
+
+    .sidebar-section { display: flex; flex-direction: column; gap: 14px; }
+
+    .section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .section-label::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* Number inputs */
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .field { display: flex; flex-direction: column; gap: 7px; }
+
+    .field label {
+      font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em;
+    }
+
+    .input-wrap {
+      position: relative; display: flex; align-items: center;
+    }
+
+    .field input[type="number"] {
+      width: 100%; padding: 11px 14px;
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text);
+      font-family: 'Sora', sans-serif; font-size: 15px; font-weight: 600;
+      outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+      -moz-appearance: textfield;
+    }
+
+    .field input[type="number"]::-webkit-inner-spin-button { display: none; }
+    .field input[type="number"]:focus {
+      border-color: var(--amber);
+      box-shadow: 0 0 0 3px var(--amber-dim);
+    }
+
+    .stepper {
+      position: absolute; right: 8px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+
+    .stepper button {
+      width: 20px; height: 18px; padding: 0;
+      background: var(--faint); border: none; border-radius: 5px;
+      color: var(--muted); cursor: pointer; font-size: 12px; line-height: 1;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .stepper button:hover { background: var(--amber); color: var(--bg); }
+
+    /* Presets */
+    .preset-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+
+    .preset-btn {
+      padding: 9px 6px; text-align: center;
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); cursor: pointer;
+      font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 600;
+      color: var(--muted); letter-spacing: 0.02em;
+      transition: all 0.18s;
+    }
+
+    .preset-btn:hover, .preset-btn.active {
+      background: var(--amber-dim); border-color: var(--amber);
+      color: var(--amber);
+    }
+
+    /* Sliders */
+    .slider-field { display: flex; flex-direction: column; gap: 8px; }
+
+    .slider-header { display: flex; justify-content: space-between; align-items: baseline; }
+
+    .slider-header label {
+      font-size: 12px; font-weight: 600; color: var(--muted);
+    }
+
+    .slider-val {
+      font-size: 13px; font-weight: 700; color: var(--amber); font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none; width: 100%; height: 4px;
+      background: var(--faint); border-radius: 99px; outline: none;
+      cursor: pointer;
+      background-image: linear-gradient(var(--amber), var(--amber));
+      background-size: var(--pct, 85%) 100%;
+      background-repeat: no-repeat;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--text);
+      border: 3px solid var(--amber);
+      box-shadow: 0 0 0 0 var(--amber-glow);
+      transition: box-shadow 0.2s;
+      cursor: grab;
+    }
+
+    input[type="range"]:active::-webkit-slider-thumb {
+      cursor: grabbing;
+      box-shadow: 0 0 0 6px var(--amber-glow);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--text); border: 3px solid var(--amber); cursor: grab;
+    }
+
+    /* Color toggle */
+    .color-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    .color-opt {
+      padding: 9px; text-align: center; border-radius: var(--radius-sm);
+      background: var(--panel); border: 1px solid var(--border);
+      cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted);
+      transition: all 0.18s; display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+
+    .color-opt.active { border-color: var(--amber); background: var(--amber-dim); color: var(--amber); }
+
+    .color-swatch {
+      width: 12px; height: 12px; border-radius: 50%;
+    }
+
+    /* Sidebar CTA buttons */
+    .btn {
+      width: 100%; padding: 14px 18px; border-radius: var(--radius-md);
+      font-family: 'Sora', sans-serif; font-size: 14px; font-weight: 700;
+      cursor: pointer; border: none; transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      letter-spacing: 0.01em;
+    }
+
+    .btn-primary {
+      background: var(--amber); color: var(--bg);
+    }
+
+    .btn-primary:hover { background: #f0b95c; transform: translateY(-1px); box-shadow: 0 8px 24px var(--amber-glow); }
+
+    .btn-secondary {
+      background: var(--panel); color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover { border-color: var(--border-hover); transform: translateY(-1px); }
+
+    .btn:disabled { opacity: 0.35; pointer-events: none; }
+
+    .btn-ghost {
+      background: transparent; color: var(--muted); border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover { color: var(--text); border-color: var(--border-hover); }
+
+    .btn-row { display: flex; flex-direction: column; gap: 10px; }
+
+    /* ─── Canvas area ─── */
+    .canvas-area {
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg);
+      padding: 36px;
+      position: relative; overflow: hidden;
+    }
+
+    /* Radial glow bg */
+    .canvas-area::before {
+      content: '';
+      position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(232,169,79,0.04), transparent 70%);
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 20px; text-align: center;
+      border: 2px dashed var(--faint);
+      border-radius: var(--radius-xl);
+      padding: 72px 48px;
+      cursor: pointer;
+      transition: all 0.25s;
+      max-width: 500px; width: 100%;
+      position: relative; overflow: hidden;
+    }
+
+    .drop-zone:hover, .drop-zone.dragging {
+      border-color: var(--amber);
+      background: var(--amber-dim);
+    }
+
+    .drop-zone.dragging {
+      transform: scale(1.02);
+    }
+
+    .drop-icon {
+      width: 72px; height: 72px;
+      border-radius: 20px; background: var(--panel);
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px;
+      transition: transform 0.25s, background 0.25s;
+    }
+
+    .drop-zone:hover .drop-icon {
+      transform: scale(1.1) rotate(-3deg);
+      background: var(--amber-dim);
+      border-color: var(--amber);
+    }
+
+    .drop-zone h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px; font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+    }
+
+    .drop-zone p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+
+    .drop-zone .drop-hint {
+      font-size: 12px; color: #4a4540; font-weight: 500;
+      padding: 6px 14px; border: 1px solid var(--faint); border-radius: 99px;
+    }
+
+    /* Image stage */
+    #imageStage {
+      display: none;
+      position: relative;
+      max-width: 100%; max-height: calc(100vh - 140px);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 0 40px 100px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+      animation: stageIn 0.4s cubic-bezier(0.22,1,0.36,1) both;
+      cursor: move;
+    }
+
+    @keyframes stageIn {
+      from { opacity:0; transform: scale(0.94) translateY(12px); }
+      to   { opacity:1; transform: scale(1) translateY(0); }
+    }
+
+    #portraitImage {
+      display: block;
+      width: var(--image-scale-width, 100%);
+      transform: translate(var(--image-x, 0px), var(--image-y, 0px));
+      user-select: none; pointer-events: none;
+      transition: width 0.1s ease;
+    }
+
+    .square-grid {
+      position: absolute; inset: 0; pointer-events: none; z-index: 2;
+      display: grid; width: 100%; height: 100%;
+    }
+
+    .grid-cell {
+      border: 1px solid rgba(var(--grid-color-r, 0), var(--grid-color-g, 0), var(--grid-color-b, 0), var(--grid-opacity, 0.8));
+    }
+
+    /* Resize handle */
+    .resize-handle {
+      position: absolute; right: -6px; bottom: -6px;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--amber); border: 3px solid var(--bg);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      cursor: nwse-resize; z-index: 5;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: var(--bg);
+      transition: transform 0.15s;
+    }
+
+    .resize-handle:hover { transform: scale(1.2); }
+
+    /* Toolbar floating */
+    .float-toolbar {
+      position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: rgba(18,16,14,0.92); backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 8px 16px;
+      display: none; align-items: center; gap: 12px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+      z-index: 10;
+      animation: toolbarIn 0.3s ease both;
+    }
+
+    @keyframes toolbarIn {
+      from { opacity:0; transform: translateX(-50%) translateY(10px); }
+      to   { opacity:1; transform: translateX(-50%) translateY(0); }
+    }
+
+    .float-toolbar.visible { display: flex; }
+
+    .tool-btn {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: transparent; border: 1px solid transparent;
+      color: var(--muted); cursor: pointer; font-size: 15px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .tool-btn:hover { background: var(--faint); color: var(--text); border-color: var(--border); }
+
+    .tool-btn.danger:hover { background: rgba(220,60,60,0.15); color: #e06060; }
+
+    .tool-divider { width: 1px; height: 20px; background: var(--border); }
+
+    .zoom-label { font-size: 12px; color: var(--muted); font-weight: 600; min-width: 38px; text-align: center; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 28px; right: 28px; z-index: 500;
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 20px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 14px; font-weight: 600; color: var(--text);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+      transform: translateY(16px); opacity: 0;
+      transition: all 0.3s cubic-bezier(0.22,1,0.36,1);
+      pointer-events: none;
+    }
+
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast .toast-icon { font-size: 18px; }
+
+    /* Keyboard hint */
+    .kbd { display: inline-flex; align-items: center; justify-content: center;
+      background: var(--faint); border: 1px solid var(--border);
+      border-radius: 5px; padding: 2px 6px; font-size: 10px; color: var(--muted); font-weight: 600;
+    }
+
+    /* Scrollbar */
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--faint); border-radius: 99px; }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 860px) {
+      .workspace { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+      .sidebar { position: relative; top: 0; height: auto; max-height: none; border-right: none; border-bottom: 1px solid var(--border); }
+      .canvas-area { min-height: 65vw; padding: 20px; }
+      header { padding: 16px 20px; }
+      .header-badge { display: none; }
+    }
+
+    @media (max-width: 500px) {
+      .field-row { grid-template-columns: 1fr; }
+      .preset-grid { grid-template-columns: repeat(3,1fr); }
+    }
+
+    /* ─── Input file hidden ─── */
+    #fileInput { display: none; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="#" class="logo">
+      <div class="logo-icon">
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+      </div>
+      <span class="logo-text">Grid<em>Ref</em></span>
+    </a>
+    <span class="header-badge">Portrait Drawing Grid Tool</span>
+  </header>
+
+  <div class="workspace">
+
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar">
+
+      <!-- Grid Size -->
+      <div class="sidebar-section">
+        <div class="section-label">Grid Size</div>
+        <div class="field-row">
+          <div class="field">
+            <label for="verticalBoxes">Columns</label>
+            <div class="input-wrap">
+              <input type="number" id="verticalBoxes" min="1" max="40" value="8" />
+              <div class="stepper">
+                <button data-target="verticalBoxes" data-step="1">▲</button>
+                <button data-target="verticalBoxes" data-step="-1">▼</button>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label for="horizontalBoxes">Rows</label>
+            <div class="input-wrap">
+              <input type="number" id="horizontalBoxes" min="1" max="40" value="10" />
+              <div class="stepper">
+                <button data-target="horizontalBoxes" data-step="1">▲</button>
+                <button data-target="horizontalBoxes" data-step="-1">▼</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Presets -->
+        <div class="preset-grid" id="presetGrid">
+          <button class="preset-btn" data-v="4" data-h="5">4 × 5</button>
+          <button class="preset-btn" data-v="6" data-h="8">6 × 8</button>
+          <button class="preset-btn active" data-v="8" data-h="10">8 × 10</button>
+          <button class="preset-btn" data-v="10" data-h="12">10 × 12</button>
+          <button class="preset-btn" data-v="12" data-h="16">12 × 16</button>
+          <button class="preset-btn" data-v="16" data-h="16">16 × 16</button>
+        </div>
+      </div>
+
+      <!-- Grid Appearance -->
+      <div class="sidebar-section">
+        <div class="section-label">Appearance</div>
+
+        <div class="slider-field">
+          <div class="slider-header">
+            <label for="gridOpacity">Line opacity</label>
+            <span class="slider-val" id="opacityVal">85%</span>
+          </div>
+          <input type="range" id="gridOpacity" min="5" max="100" value="85" />
+        </div>
+
+        <div class="slider-field">
+          <div class="slider-header">
+            <label for="lineWidth">Line weight</label>
+            <span class="slider-val" id="lineWidthVal">1px</span>
+          </div>
+          <input type="range" id="lineWidth" min="1" max="5" value="1" step="0.5" />
+        </div>
+
+        <div class="color-toggle">
+          <div class="color-opt active" data-color="dark" id="colorDark">
+            <span class="color-swatch" style="background:#000;border:1px solid rgba(255,255,255,0.2)"></span> Dark
+          </div>
+          <div class="color-opt" data-color="light" id="colorLight">
+            <span class="color-swatch" style="background:#fff;border:1px solid rgba(0,0,0,0.15)"></span> Light
+          </div>
+        </div>
+      </div>
+
+      <!-- Image Position -->
+      <div class="sidebar-section">
+        <div class="section-label">Position &amp; Zoom</div>
+
+        <div class="slider-field">
+          <div class="slider-header">
+            <label for="imageX">← Horizontal →</label>
+            <span class="slider-val" id="xVal">0</span>
+          </div>
+          <input type="range" id="imageX" min="-300" max="300" value="0" />
+        </div>
+
+        <div class="slider-field">
+          <div class="slider-header">
+            <label for="imageY">↑ Vertical ↓</label>
+            <span class="slider-val" id="yVal">0</span>
+          </div>
+          <input type="range" id="imageY" min="-300" max="300" value="0" />
+        </div>
+
+        <div class="slider-field">
+          <div class="slider-header">
+            <label for="zoomRange">Zoom</label>
+            <span class="slider-val" id="zoomVal">100%</span>
+          </div>
+          <input type="range" id="zoomRange" min="25" max="300" value="100" />
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="sidebar-section">
+        <div class="section-label">Export</div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="uploadBtn">
+            <span>📁</span> Upload Image
+          </button>
+          <button class="btn btn-secondary" id="downloadBtn" disabled>
+            <span>⬇</span> Download PNG
+          </button>
+          <button class="btn btn-ghost" id="resetBtn">
+            ↺ &nbsp;Reset Everything
+          </button>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ── Canvas ── -->
+    <div class="canvas-area" id="canvasArea">
+
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-icon">🖼</div>
+        <h2>Drop your reference image here</h2>
+        <p>Upload any portrait photo, illustration,<br />or artwork to add a drawing grid.</p>
+        <span class="drop-hint">JPG, PNG, WEBP, GIF — any image works</span>
+      </div>
+
+      <div id="imageStage">
+        <img id="portraitImage" alt="Portrait reference" draggable="false" />
+        <div class="square-grid" id="squareGrid"></div>
+        <div class="resize-handle" id="resizeHandle" title="Drag to resize">⤡</div>
+      </div>
+
+      <div class="float-toolbar" id="floatToolbar">
+        <button class="tool-btn" id="tbZoomOut" title="Zoom out (-)">−</button>
+        <span class="zoom-label" id="tbZoomLabel">100%</span>
+        <button class="tool-btn" id="tbZoomIn" title="Zoom in (+)">+</button>
+        <div class="tool-divider"></div>
+        <button class="tool-btn" id="tbFit" title="Fit to view">⊞</button>
+        <button class="tool-btn" id="tbCenter" title="Center image">⊕</button>
+        <div class="tool-divider"></div>
+        <button class="tool-btn danger" id="tbReset" title="Remove image">✕</button>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="toast" id="toast">
+    <span class="toast-icon">✓</span>
+    <span id="toastMsg">Image downloaded!</span>
+  </div>
+
+  <input type="file" id="fileInput" accept="image/*" />
+
+  <script>
+    // ─── Element refs ───
+    const fileInput      = document.getElementById('fileInput');
+    const uploadBtn      = document.getElementById('uploadBtn');
+    const downloadBtn    = document.getElementById('downloadBtn');
+    const resetBtn       = document.getElementById('resetBtn');
+    const dropZone       = document.getElementById('dropZone');
+    const imageStage     = document.getElementById('imageStage');
+    const portraitImage  = document.getElementById('portraitImage');
+    const squareGrid     = document.getElementById('squareGrid');
+    const floatToolbar   = document.getElementById('floatToolbar');
+    const verticalBoxes  = document.getElementById('verticalBoxes');
+    const horizontalBoxes= document.getElementById('horizontalBoxes');
+    const gridOpacity    = document.getElementById('gridOpacity');
+    const lineWidth      = document.getElementById('lineWidth');
+    const imageX         = document.getElementById('imageX');
+    const imageY         = document.getElementById('imageY');
+    const zoomRange      = document.getElementById('zoomRange');
+    const opacityVal     = document.getElementById('opacityVal');
+    const lineWidthVal   = document.getElementById('lineWidthVal');
+    const xVal           = document.getElementById('xVal');
+    const yVal           = document.getElementById('yVal');
+    const zoomVal        = document.getElementById('zoomVal');
+    const tbZoomLabel    = document.getElementById('tbZoomLabel');
+    const toast          = document.getElementById('toast');
+    const toastMsg       = document.getElementById('toastMsg');
+
+    let gridColor = { r: 0, g: 0, b: 0 };
+    let imageLoaded = false;
+    let imageScale = 1;
+    let isResizing = false;
+    let resizeStart = { x: 0, y: 0, scale: 1 };
+    let isDragging = false;
+    let dragStart  = { x: 0, y: 0, ix: 0, iy: 0 };
+    let toastTimer;
+
+    // ─── Slider value updaters ───
+    function updateSliderFill(el) {
+      const min = parseFloat(el.min), max = parseFloat(el.max), val = parseFloat(el.value);
+      const pct = ((val - min) / (max - min) * 100).toFixed(1) + '%';
+      el.style.setProperty('--pct', pct);
+    }
+
+    document.querySelectorAll('input[type="range"]').forEach(el => {
+      updateSliderFill(el);
+      el.addEventListener('input', () => updateSliderFill(el));
+    });
+
+    // ─── Stepper buttons ───
+    document.querySelectorAll('.stepper button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = document.getElementById(btn.dataset.target);
+        const step   = parseInt(btn.dataset.step);
+        let   val    = parseInt(target.value) + step;
+        target.value = Math.max(parseInt(target.min)||1, Math.min(parseInt(target.max)||40, val));
+        target.dispatchEvent(new Event('input'));
+      });
+    });
+
+    // ─── Grid presets ───
+    document.getElementById('presetGrid').addEventListener('click', e => {
+      const btn = e.target.closest('.preset-btn');
+      if (!btn) return;
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      verticalBoxes.value   = btn.dataset.v;
+      horizontalBoxes.value = btn.dataset.h;
+      renderGrid();
+    });
+
+    // ─── Color toggle ───
+    document.querySelectorAll('.color-opt').forEach(opt => {
+      opt.addEventListener('click', () => {
+        document.querySelectorAll('.color-opt').forEach(o => o.classList.remove('active'));
+        opt.classList.add('active');
+        if (opt.dataset.color === 'dark') gridColor = { r:0, g:0, b:0 };
+        else                              gridColor = { r:255, g:255, b:255 };
+        renderGrid();
+      });
+    });
+
+    // ─── Upload / open ───
+    function openUploader() { fileInput.click(); }
+    uploadBtn.addEventListener('click', openUploader);
+    dropZone .addEventListener('click', openUploader);
+
+    // Drag & drop
+    const canvasArea = document.getElementById('canvasArea');
+    canvasArea.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragging'); });
+    canvasArea.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+    canvasArea.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragging');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) loadFile(file);
+    });
+
+    fileInput.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (file) loadFile(file);
+    });
+
+    function loadFile(file) {
+      const reader = new FileReader();
+      reader.onload = evt => {
+        portraitImage.src = evt.target.result;
+        portraitImage.onload = () => {
+          dropZone.style.display = 'none';
+          imageStage.style.display = 'block';
+          floatToolbar.classList.add('visible');
+          downloadBtn.disabled = false;
+          imageLoaded = true;
+
+          // Auto-fit
+          const maxW = canvasArea.clientWidth - 72;
+          const maxH = canvasArea.clientHeight - 72;
+          const ratio = Math.min(maxW / portraitImage.naturalWidth, maxH / portraitImage.naturalHeight, 1);
+          imageScale = ratio;
+          zoomRange.value = Math.round(ratio * 100);
+          updateSliderFill(zoomRange);
+          updateStageSize();
+          renderGrid();
+        };
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ─── Stage sizing ───
+    function updateStageSize() {
+      const w = Math.round(portraitImage.naturalWidth  * imageScale);
+      const h = Math.round(portraitImage.naturalHeight * imageScale);
+      imageStage.style.width  = w + 'px';
+      imageStage.style.height = h + 'px';
+      imageStage.style.setProperty('--image-scale-width', '100%');
+      portraitImage.style.width  = '100%';
+      portraitImage.style.height = '100%';
+      updateImagePos();
+      updateZoomLabel();
+    }
+
+    function updateImagePos() {
+      imageStage.style.setProperty('--image-x', imageX.value + 'px');
+      imageStage.style.setProperty('--image-y', imageY.value + 'px');
+    }
+
+    function updateZoomLabel() {
+      const pct = Math.round(imageScale * 100) + '%';
+      zoomVal.textContent  = pct;
+      tbZoomLabel.textContent = pct;
+    }
+
+    // ─── Render grid ───
+    function renderGrid() {
+      const v  = Math.max(1, parseInt(verticalBoxes.value)   || 1);
+      const h  = Math.max(1, parseInt(horizontalBoxes.value) || 1);
+      const op = parseFloat(gridOpacity.value) / 100;
+      const lw = parseFloat(lineWidth.value) || 1;
+
+      squareGrid.innerHTML = '';
+      squareGrid.style.gridTemplateColumns = `repeat(${v}, 1fr)`;
+      squareGrid.style.gridTemplateRows    = `repeat(${h}, 1fr)`;
+      squareGrid.style.setProperty('--grid-opacity',   op);
+      squareGrid.style.setProperty('--grid-color-r',   gridColor.r);
+      squareGrid.style.setProperty('--grid-color-g',   gridColor.g);
+      squareGrid.style.setProperty('--grid-color-b',   gridColor.b);
+
+      const stageW = imageStage.clientWidth  || 1;
+      const stageH = imageStage.clientHeight || 1;
+      const cell   = Math.min(stageW / v, stageH / h);
+      const gw = cell * v, gh = cell * h;
+
+      squareGrid.style.width  = gw + 'px';
+      squareGrid.style.height = gh + 'px';
+      squareGrid.style.left   = ((stageW - gw) / 2) + 'px';
+      squareGrid.style.top    = ((stageH - gh) / 2) + 'px';
+
+      for (let i = 0; i < v * h; i++) {
+        const c = document.createElement('div');
+        c.className = 'grid-cell';
+        c.style.borderWidth = lw + 'px';
+        squareGrid.appendChild(c);
+      }
+    }
+
+    // ─── Input events ───
+    gridOpacity.addEventListener('input', () => {
+      opacityVal.textContent = gridOpacity.value + '%';
+      renderGrid();
+    });
+
+    lineWidth.addEventListener('input', () => {
+      lineWidthVal.textContent = lineWidth.value + 'px';
+      renderGrid();
+    });
+
+    verticalBoxes  .addEventListener('input', () => { clearPresetActive(); renderGrid(); });
+    horizontalBoxes.addEventListener('input', () => { clearPresetActive(); renderGrid(); });
+
+    function clearPresetActive() {
+      const v = parseInt(verticalBoxes.value), h = parseInt(horizontalBoxes.value);
+      document.querySelectorAll('.preset-btn').forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.v)===v && parseInt(b.dataset.h)===h);
+      });
+    }
+
+    imageX.addEventListener('input', () => { xVal.textContent = imageX.value; updateImagePos(); });
+    imageY.addEventListener('input', () => { yVal.textContent = imageY.value; updateImagePos(); });
+
+    zoomRange.addEventListener('input', () => {
+      imageScale = parseFloat(zoomRange.value) / 100;
+      updateStageSize();
+      renderGrid();
+    });
+
+    // ─── Resize handle ───
+    const resizeHandle = document.getElementById('resizeHandle');
+
+    resizeHandle.addEventListener('pointerdown', e => {
+      e.stopPropagation(); e.preventDefault();
+      isResizing = true;
+      resizeStart = { x: e.clientX, y: e.clientY, scale: imageScale };
+      resizeHandle.setPointerCapture(e.pointerId);
+    });
+
+    resizeHandle.addEventListener('pointermove', e => {
+      if (!isResizing) return;
+      const dx = e.clientX - resizeStart.x;
+      const dy = e.clientY - resizeStart.y;
+      const delta = (dx + dy) / 400;
+      imageScale = Math.min(3, Math.max(0.1, resizeStart.scale + delta));
+      zoomRange.value = Math.round(imageScale * 100);
+      updateSliderFill(zoomRange);
+      updateStageSize();
+      renderGrid();
+    });
+
+    resizeHandle.addEventListener('pointerup', () => { isResizing = false; });
+    resizeHandle.addEventListener('pointercancel', () => { isResizing = false; });
+
+    // ─── Drag image ───
+    imageStage.addEventListener('pointerdown', e => {
+      if (e.target === resizeHandle) return;
+      isDragging = true;
+      dragStart = { x: e.clientX, y: e.clientY, ix: parseFloat(imageX.value)||0, iy: parseFloat(imageY.value)||0 };
+      imageStage.setPointerCapture(e.pointerId);
+      imageStage.style.cursor = 'grabbing';
+    });
+
+    imageStage.addEventListener('pointermove', e => {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      const nx = Math.max(-300, Math.min(300, dragStart.ix + dx));
+      const ny = Math.max(-300, Math.min(300, dragStart.iy + dy));
+      imageX.value = nx; imageY.value = ny;
+      xVal.textContent = Math.round(nx); yVal.textContent = Math.round(ny);
+      updateSliderFill(imageX); updateSliderFill(imageY);
+      updateImagePos();
+    });
+
+    imageStage.addEventListener('pointerup', () => { isDragging = false; imageStage.style.cursor = 'move'; });
+    imageStage.addEventListener('pointercancel', () => { isDragging = false; imageStage.style.cursor = 'move'; });
+
+    // Mouse wheel zoom
+    imageStage.addEventListener('wheel', e => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.05 : 0.05;
+      imageScale = Math.min(3, Math.max(0.1, imageScale + delta));
+      zoomRange.value = Math.round(imageScale * 100);
+      updateSliderFill(zoomRange);
+      updateStageSize();
+      renderGrid();
+    }, { passive: false });
+
+    // ─── Float toolbar ───
+    document.getElementById('tbZoomIn') .addEventListener('click', () => adjustZoom(10));
+    document.getElementById('tbZoomOut').addEventListener('click', () => adjustZoom(-10));
+    document.getElementById('tbFit').addEventListener('click', fitImage);
+    document.getElementById('tbCenter').addEventListener('click', centerImage);
+    document.getElementById('tbReset').addEventListener('click', doReset);
+
+    function adjustZoom(delta) {
+      imageScale = Math.min(3, Math.max(0.1, imageScale + delta/100));
+      zoomRange.value = Math.round(imageScale * 100);
+      updateSliderFill(zoomRange);
+      updateStageSize();
+      renderGrid();
+    }
+
+    function fitImage() {
+      if (!imageLoaded) return;
+      const maxW = canvasArea.clientWidth - 72;
+      const maxH = canvasArea.clientHeight - 72;
+      imageScale = Math.min(maxW / portraitImage.naturalWidth, maxH / portraitImage.naturalHeight, 1);
+      zoomRange.value = Math.round(imageScale * 100);
+      updateSliderFill(zoomRange);
+      updateStageSize(); renderGrid();
+      centerImage();
+    }
+
+    function centerImage() {
+      imageX.value = 0; imageY.value = 0;
+      xVal.textContent = 0; yVal.textContent = 0;
+      updateSliderFill(imageX); updateSliderFill(imageY);
+      updateImagePos();
+    }
+
+    // ─── Reset ───
+    resetBtn.addEventListener('click', doReset);
+
+    function doReset() {
+      fileInput.value = '';
+      portraitImage.removeAttribute('src');
+      imageStage.style.display = 'none';
+      dropZone.style.display  = 'flex';
+      floatToolbar.classList.remove('visible');
+      downloadBtn.disabled = true;
+      imageLoaded = false;
+      imageScale  = 1;
+
+      verticalBoxes.value   = 8;
+      horizontalBoxes.value = 10;
+      gridOpacity.value     = 85;
+      lineWidth.value       = 1;
+      zoomRange.value       = 100;
+      imageX.value = 0; imageY.value = 0;
+
+      opacityVal.textContent  = '85%';
+      lineWidthVal.textContent= '1px';
+      xVal.textContent        = '0';
+      yVal.textContent        = '0';
+      zoomVal.textContent     = '100%';
+
+      document.querySelectorAll('input[type="range"]').forEach(updateSliderFill);
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector('[data-v="8"]').classList.add('active');
+
+      squareGrid.innerHTML = '';
+    }
+
+    // ─── Download ───
+    downloadBtn.addEventListener('click', () => {
+      if (!portraitImage.src || !imageLoaded) return;
+
+      const v  = Math.max(1, parseInt(verticalBoxes.value) || 1);
+      const h  = Math.max(1, parseInt(horizontalBoxes.value) || 1);
+      const op = parseFloat(gridOpacity.value) / 100;
+      const lw = parseFloat(lineWidth.value) || 1;
+
+      const natW = portraitImage.naturalWidth;
+      const natH = portraitImage.naturalHeight;
+
+      // The stage viewport is natW*imageScale × natH*imageScale px on screen.
+      // The image is shifted by (imageX, imageY) screen pixels inside that viewport.
+      // To reproduce this at natural resolution we divide screen offsets by imageScale,
+      // then draw the full natural image starting at that translated origin.
+      // The canvas itself is natW × natH, which clips exactly like the stage does.
+      const offsetX = parseFloat(imageX.value) / imageScale;
+      const offsetY = parseFloat(imageY.value) / imageScale;
+
+      const canvas = document.createElement('canvas');
+      canvas.width  = natW;
+      canvas.height = natH;
+      const ctx = canvas.getContext('2d');
+
+      // Draw image with the same pan offset, at full natural size (zoom is baked
+      // into the canvas dimensions matching the stage viewport ratio).
+      ctx.drawImage(portraitImage, offsetX, offsetY, natW, natH);
+
+      // Grid — computed on the canvas viewport (natW × natH)
+      const cell  = Math.min(natW / v, natH / h);
+      const gw    = cell * v, gh = cell * h;
+      const ox    = (natW - gw) / 2;
+      const oy    = (natH - gh) / 2;
+
+      // Scale line width up proportionally so it looks the same as the preview
+      const pxRatio = natW / imageStage.clientWidth;
+      const strokeW = Math.max(0.5, lw * pxRatio);
+
+      ctx.strokeStyle = `rgba(${gridColor.r},${gridColor.g},${gridColor.b},${op})`;
+      ctx.lineWidth   = strokeW;
+
+      for (let i = 0; i <= v; i++) {
+        const x = ox + i * cell;
+        ctx.beginPath(); ctx.moveTo(x, oy); ctx.lineTo(x, oy + gh); ctx.stroke();
+      }
+      for (let i = 0; i <= h; i++) {
+        const y = oy + i * cell;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + gw, y); ctx.stroke();
+      }
+
+      const link = document.createElement('a');
+      link.download = 'portrait-grid.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+
+      showToast('✓', 'Image saved as portrait-grid.png');
+    });
+
+    // ─── Toast ───
+    function showToast(icon, msg) {
+      document.querySelector('.toast .toast-icon').textContent = icon;
+      toastMsg.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+    }
+
+    // ─── Keyboard shortcuts ───
+    document.addEventListener('keydown', e => {
+      if (!imageLoaded) return;
+      if (e.key === '=' || e.key === '+') adjustZoom(10);
+      if (e.key === '-') adjustZoom(-10);
+      if (e.key === '0') fitImage();
+      if (e.key === 'c') centerImage();
+    });
+
+    // ─── Init slider fills ───
+    document.querySelectorAll('input[type="range"]').forEach(updateSliderFill);
+  </script>
+</body>
+</html>
